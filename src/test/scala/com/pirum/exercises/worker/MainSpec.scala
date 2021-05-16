@@ -68,6 +68,18 @@ object MainSpec extends Matchers {
   }
 
   @Test
+  def testLongRunningTaskWithQuickOne(): Unit = {
+    //given a hanging task
+    val latch = new CountDownLatch(1)
+    val slowTask = LambdaTask(() => Thread.sleep(200))
+    val quickTask = LambdaTask(() => ())
+    //then run tasks should return successful result for both
+    val timeout = Duration.apply(500, TimeUnit.MILLISECONDS)
+    val run = Future(Main.runTasks(List(slowTask, quickTask), timeout, workers = 2))
+    Await.result(run, timeout * 2) shouldBe List(TaskResult.Success, TaskResult.Success)
+  }
+
+  @Test
   def testFailingTaskMixedWithSuccessful(): Unit = {
     val exception = new Exception("some ex")
     //given failing task
