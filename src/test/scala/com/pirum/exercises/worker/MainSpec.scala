@@ -45,12 +45,19 @@ object MainSpec extends Matchers {
   @Test
   def testSingleHangingTask(): Unit = {
     //given a hanging task
+    val mutex = "mutex"
     val latch = new CountDownLatch(1)
-    val task = LambdaTask(() => latch.await())
+    val task = LambdaTask(() => mutex.synchronized { latch.await() })
     //then run tasks should return the timeout failure in the list after timeout
     val timeout = Duration.apply(200, TimeUnit.MILLISECONDS)
     try {
-      val run = Future(Main.runTasks(List(task), timeout, workers = 1))
+      val run = Future {
+        val res = Main.runTasks(List(task), timeout, workers = 1)
+        mutex.synchronized {
+          "mutex no longer held by the task, the task should have been stopped"
+        }
+        res
+      }
       Await.result(run, timeout * 2) shouldBe List(TaskResult.Timeout)
     } finally {
       latch.countDown()
