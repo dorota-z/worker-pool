@@ -1,19 +1,22 @@
 package com.pirum.exercises.worker
 
 import org.junit.jupiter.api.Test
+import org.scalatest.concurrent.Eventually.eventually
+import org.scalatest.concurrent.PatienceConfiguration.Timeout
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.time.{Millis, Span}
 
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.concurrent.{Await, Future}
 
 object MainSpec extends Matchers {
 
   @Test
   def testRunZeroTasks(): Unit = {
-    Main.runTasks(Nil) shouldBe Nil
+    Main.runTasks(Nil, workers = 1) shouldBe Nil
   }
 
   @Test
@@ -21,7 +24,7 @@ object MainSpec extends Matchers {
     //given successful task
     val task = LambdaTask(() => ())
     //then run tasks should return success in the list
-    Main.runTasks(List(task)) shouldBe List(TaskResult.Success)
+    Main.runTasks(List(task), workers = 1) shouldBe List(TaskResult.Success)
   }
 
   @Test
@@ -30,18 +33,18 @@ object MainSpec extends Matchers {
     //given failing task
     val task = LambdaTask(() => throw exception)
     //then run tasks should return the failure in the list
-    Main.runTasks(List(task)) shouldBe List(TaskResult.Failure)
+    Main.runTasks(List(task), workers = 1) shouldBe List(TaskResult.Failure)
   }
 
   @Test
-  def testHangingTask(): Unit = {
+  def testSingleHangingTask(): Unit = {
     //given a hanging task
     val latch = new CountDownLatch(1)
     val task = LambdaTask(() => latch.await())
     //then run tasks should return the timeout failure in the list after timeout
     val timeout = Duration.apply(200, TimeUnit.MILLISECONDS)
     try {
-      val run = Future(Main.runTasks(List(task), timeout))
+      val run = Future(Main.runTasks(List(task), timeout, workers = 1))
       Await.result(run, timeout * 2) shouldBe List(TaskResult.Timeout)
     } finally {
       latch.countDown()
@@ -57,7 +60,7 @@ object MainSpec extends Matchers {
     //then run tasks should return the timeout failure in the list after timeout
     val timeout = Duration.apply(200, TimeUnit.MILLISECONDS)
     try {
-      val run = Future(Main.runTasks(List(hangingTask, successfulTask), timeout))
+      val run = Future(Main.runTasks(List(hangingTask, successfulTask), timeout, workers = 2))
       Await.result(run, timeout * 2) shouldBe List(TaskResult.Timeout, TaskResult.Success)
     } finally {
       latch.countDown()
@@ -71,7 +74,49 @@ object MainSpec extends Matchers {
     val failingTask = LambdaTask(() => throw exception)
     val successfulTask = LambdaTask(() => ())
     //then run tasks should return the failure in the list
-    Main.runTasks(List(failingTask, successfulTask)) shouldBe List(TaskResult.Failure, TaskResult.Success)
+    Main.runTasks(List(failingTask, successfulTask), workers = 2) shouldBe List(TaskResult.Failure, TaskResult.Success)
+  }
+
+  @Test
+  def testWorkerNumbersNotExceeded(): Unit = {
+    val started = (0 to 2).map(_ => new CountDownLatch(1))
+    val allowedToFinish = (0 to 2).map(_ => new CountDownLatch(1))
+
+    try {
+      //given tasks that block on a latch
+      val tasks = (0 to 2).map(i => LambdaTask(() => {
+        started(i).countDown()
+        println(s"started $i")
+        allowedToFinish(i).await()
+        println(s"finishing $i")
+      }))
+
+      //when tasks are run using fewer workers
+      val workers = 2
+      Future {
+        Main.runTasks(tasks.toList, timeout = FiniteDuration.apply(3, TimeUnit.SECONDS), workers = workers)
+        println("finished whole run")
+      }
+
+      //then he count of tasks that have started should be equal to workers
+      eventually(timeout = Timeout(Span(200, Millis))) {
+        started.count(_.getCount == 0) shouldBe workers
+      }
+      Thread.sleep(200)
+      //and the count of tasks that have started should remain equal to workers
+      started.count(_.getCount == 0) shouldBe workers
+
+      //when the started tasks are allowed to finish
+      allowedToFinish.foreach(_.countDown())
+      //then he count of tasks that have started should increase
+      eventually(timeout = Timeout(Span(500, Millis))) {
+        started.count(_.getCount == 0) shouldBe tasks.length
+      }
+    } finally {
+      allowedToFinish.foreach(_.countDown())
+    }
+
+
   }
 
   @Test
@@ -80,7 +125,7 @@ object MainSpec extends Matchers {
     val i = new AtomicInteger(0)
     val incrementingTask = LambdaTask(() => i.incrementAndGet())
     //when task gets run
-    Main.runTasks(List(incrementingTask))
+    Main.runTasks(List(incrementingTask), workers = 1)
     //then side effect should happen exactly once
     i.get shouldBe 1
   }
