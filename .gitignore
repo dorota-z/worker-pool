@@ -4,3 +4,4 @@ metals.sbt
 .vscode
 .metals
 .bloop
+.idea
