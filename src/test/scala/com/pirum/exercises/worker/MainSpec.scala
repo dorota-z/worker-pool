@@ -1,17 +1,13 @@
 package com.pirum.exercises.worker
 
 import org.junit.jupiter.api.Test
-import org.scalatest.concurrent.Eventually.eventually
-import org.scalatest.concurrent.PatienceConfiguration.Timeout
 import org.scalatest.matchers.should.Matchers
-import org.scalatest.time.Span
 
-import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.{CountDownLatch, TimeUnit}
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.Duration
-import scala.util.{Failure, Success}
+import scala.concurrent.{Await, Future}
 
 object MainSpec extends Matchers {
 
@@ -46,16 +42,30 @@ object MainSpec extends Matchers {
     val timeout = Duration.apply(200, TimeUnit.MILLISECONDS)
     try {
       val run = Future(Main.runTasks(List(task), timeout))
-      val results = Await.result(run, timeout * 2)
-      results.length shouldBe 1
-      results.head shouldBe TaskResult.Timeout
+      Await.result(run, timeout * 2) shouldBe List(TaskResult.Timeout)
     } finally {
       latch.countDown()
     }
   }
 
   @Test
-  def testMixedTasks(): Unit = {
+  def testHangingTaskMixedWithSuccessful(): Unit = {
+    //given a hanging task
+    val latch = new CountDownLatch(1)
+    val hangingTask = LambdaTask(() => latch.await())
+    val successfulTask = LambdaTask(() => ())
+    //then run tasks should return the timeout failure in the list after timeout
+    val timeout = Duration.apply(200, TimeUnit.MILLISECONDS)
+    try {
+      val run = Future(Main.runTasks(List(hangingTask, successfulTask), timeout))
+      Await.result(run, timeout * 2) shouldBe List(TaskResult.Timeout, TaskResult.Success)
+    } finally {
+      latch.countDown()
+    }
+  }
+
+  @Test
+  def testFailingTaskMixedWithSuccessful(): Unit = {
     val exception = new Exception("some ex")
     //given failing task
     val failingTask = LambdaTask(() => throw exception)
