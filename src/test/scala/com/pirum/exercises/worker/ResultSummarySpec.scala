@@ -3,26 +3,32 @@ package com.pirum.exercises.worker
 import org.junit.jupiter.api.Test
 import org.scalatest.matchers.should.Matchers
 
-import scala.util.{Failure, Success}
-
 class ResultSummarySpec extends Matchers{
 
   @Test
   def testOnlySuccessfulResults(): Unit = {
-    ResultSummary(List(Success(), Success())) shouldBe ResultSummary(List(1, 2), Nil)
+    val summary = ResultSummary(List(TaskResult.Success, TaskResult.Success))
+    summary.successful shouldBe List(1, 2)
+    summary.failed shouldBe Nil
+    summary.timedOut shouldBe Nil
   }
 
   @Test
   def testMixedResults(): Unit = {
-    ResultSummary(List(Failure(new Exception("some ex")), Success())) shouldBe ResultSummary(List(2), List(1))
+    val summary = ResultSummary(List(TaskResult.Failure, TaskResult.Success, TaskResult.Timeout))
+    summary.successful shouldBe List(2)
+    summary.failed shouldBe List(1)
+    summary.timedOut shouldBe List(3)
   }
 
   @Test
   def testReport(): Unit = {
-    ResultSummary(List(2, 5), List(1, 3, 4)).toString shouldBe
+    val summary = ResultSummary(List(TaskResult.Failure, TaskResult.Success, TaskResult.Timeout, TaskResult.Success))
+    summary.toString shouldBe
       """
-        |Successful tasks: [Task2, Task5]
-        |Failed tasks: [Task1, Task3, Task4]
+        |Successful tasks: [Task2, Task4]
+        |Failed tasks: [Task1]
+        |Timed out tasks: [Task3]
         |""".stripMargin
   }
 }

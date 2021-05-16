@@ -2,23 +2,17 @@ package com.pirum.exercises.worker
 
 import scala.util.Try
 
-case class ResultSummary(successful: List[Int], failed: List[Int]) {
+case class ResultSummary(taskResult: List[TaskResult]) {
+
+  private[worker] def successful: List[Int] = taskResult.zipWithIndex.collect { case (TaskResult.Success, i) => i + 1 }
+  private[worker] def failed: List[Int] = taskResult.zipWithIndex.collect { case (TaskResult.Failure, i) => i + 1 }
+  private[worker] def timedOut: List[Int] = taskResult.zipWithIndex.collect { case (TaskResult.Timeout, i) => i + 1 }
 
   override def toString: String = {
     s"""
        |Successful tasks: [${successful.map(i => s"Task$i").mkString(", ")}]
        |Failed tasks: [${failed.map(i => s"Task$i").mkString(", ")}]
+       |Timed out tasks: [${timedOut.map(i => s"Task$i").mkString(", ")}]
        |""".stripMargin
-  }
-}
-
-object ResultSummary {
-
-  def apply(results: List[Try[Unit]]): ResultSummary = {
-    val withIndex = results.zipWithIndex.map { case (res, idx) => (res, idx + 1) }
-    val (successful, failed) = withIndex.partition(_._1.isSuccess)
-    val successfulIndices = successful.map(_._2)
-    val failedIndices = failed.map(_._2)
-    ResultSummary(successful = successfulIndices, failed = failedIndices)
   }
 }
