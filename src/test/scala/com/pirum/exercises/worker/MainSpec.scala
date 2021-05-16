@@ -24,7 +24,10 @@ object MainSpec extends Matchers {
     //given successful task
     val task = LambdaTask(() => ())
     //then run tasks should return success in the list
-    Main.runTasks(List(task), workers = 1) shouldBe List(TaskResult.Success)
+    Main.runTasks(List(task), workers = 1) match {
+      case  List(TaskResult.Success(_)) =>
+      case  _ => fail()
+    }
   }
 
   @Test
@@ -33,7 +36,10 @@ object MainSpec extends Matchers {
     //given failing task
     val task = LambdaTask(() => throw exception)
     //then run tasks should return the failure in the list
-    Main.runTasks(List(task), workers = 1) shouldBe List(TaskResult.Failure)
+    Main.runTasks(List(task), workers = 1) match {
+      case  List(TaskResult.Failure(_)) =>
+      case  _ => fail()
+    }
   }
 
   @Test
@@ -61,7 +67,10 @@ object MainSpec extends Matchers {
     val timeout = Duration.apply(200, TimeUnit.MILLISECONDS)
     try {
       val run = Future(Main.runTasks(List(hangingTask, successfulTask), timeout, workers = 2))
-      Await.result(run, timeout * 2) shouldBe List(TaskResult.Timeout, TaskResult.Success)
+      Await.result(run, timeout * 2) match {
+        case  List(TaskResult.Timeout, TaskResult.Success(_)) =>
+        case  _ => fail()
+      }
     } finally {
       latch.countDown()
     }
@@ -70,13 +79,17 @@ object MainSpec extends Matchers {
   @Test
   def testLongRunningTaskWithQuickOne(): Unit = {
     //given a hanging task
-    val latch = new CountDownLatch(1)
     val slowTask = LambdaTask(() => Thread.sleep(200))
     val quickTask = LambdaTask(() => ())
     //then run tasks should return successful result for both
     val timeout = Duration.apply(500, TimeUnit.MILLISECONDS)
     val run = Future(Main.runTasks(List(slowTask, quickTask), timeout, workers = 2))
-    Await.result(run, timeout * 2) shouldBe List(TaskResult.Success, TaskResult.Success)
+    Await.result(run, timeout * 2) match {
+      case  List(TaskResult.Success(longDuration), TaskResult.Success(shortDuration)) =>
+        longDuration should be > 200L
+        shortDuration should be < 100L
+      case  _ => fail()
+    }
   }
 
   @Test
@@ -86,7 +99,10 @@ object MainSpec extends Matchers {
     val failingTask = LambdaTask(() => throw exception)
     val successfulTask = LambdaTask(() => ())
     //then run tasks should return the failure in the list
-    Main.runTasks(List(failingTask, successfulTask), workers = 2) shouldBe List(TaskResult.Failure, TaskResult.Success)
+    Main.runTasks(List(failingTask, successfulTask), workers = 2)  match {
+      case  List(TaskResult.Failure(_), TaskResult.Success(_)) =>
+      case  _ => fail()
+    }
   }
 
   @Test
@@ -127,8 +143,6 @@ object MainSpec extends Matchers {
     } finally {
       allowedToFinish.foreach(_.countDown())
     }
-
-
   }
 
   @Test

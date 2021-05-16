@@ -4,7 +4,7 @@ trait TaskResult
 
 object TaskResult {
 
-  case object Success extends TaskResult
-  case object Failure extends TaskResult
+  case class Success(duration: Long) extends TaskResult
+  case class Failure(duration: Long) extends TaskResult
   case object Timeout extends TaskResult
 }

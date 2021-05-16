@@ -1,6 +1,6 @@
 package com.pirum.exercises.worker
 
-import java.util.concurrent.{Executor, Executors, TimeUnit, TimeoutException}
+import java.util.concurrent.{Executors, TimeUnit, TimeoutException}
 import scala.concurrent.{Await, ExecutionContext, ExecutionContextExecutorService, Future}
 import scala.concurrent.duration.FiniteDuration
 import scala.util.{Failure, Success, Try}
@@ -29,18 +29,27 @@ object Main extends Program {
 
     futures.map(_.value match {
       case None => TaskResult.Timeout
-      case Some(Failure(_)) => TaskResult.Failure
-      case Some(Success(_)) => TaskResult.Success
+      case Some(Failure(ex)) =>
+        println(s"[ERROR] Unexpected failure when measuring duration of the task ${ex.getMessage}")
+        TaskResult.Failure(Int.MaxValue)
+      case Some(Success((dur, Success(_)))) => TaskResult.Success(dur)
+      case Some(Success((dur, Failure(_)))) => TaskResult.Failure(dur)
     })
   }
 
-  private def runTasksPar(tasks: List[Task], workers: Int): List[Future[Unit]] = {
+  private def runTasksPar(tasks: List[Task], workers: Int): List[Future[(Long, Try[Unit])]] = {
     if (tasks.isEmpty) Nil
     else {
       val execService = Executors.newFixedThreadPool(workers)
       val execContext = ExecutionContext.fromExecutorService(execService)
 
-      tasks.map(t => Future(t.run())(execContext))
+      tasks.map(t => Future(timed(t.run()))(execContext))
     }
+  }
+  private def timed(fn: => Unit): (Long, Try[Unit]) = {
+    val t1 = System.currentTimeMillis()
+    val res = Try(fn)
+    val t2 = System.currentTimeMillis()
+    (t2 - t1, res)
   }
 }
