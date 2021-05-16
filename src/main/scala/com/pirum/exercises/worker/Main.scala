@@ -5,7 +5,12 @@ import scala.concurrent.{Await, ExecutionContext, ExecutionContextExecutorServic
 import scala.concurrent.duration.FiniteDuration
 import scala.util.{Failure, Success, Try}
 
-object Main extends App with Program {
+object Main extends Program {
+
+  def main(args: Array[String]): Unit = {
+    //main call to program goes here, for example:
+    //program(List(LambdaTask(() => println("hello"))), FiniteDuration.apply(2, TimeUnit.SECONDS), workers = 1)
+  }
 
   def program(tasks: List[Task], timeout: FiniteDuration, workers: Int): Unit = {
     val results = runTasks(tasks, timeout, workers)
@@ -38,6 +43,4 @@ object Main extends App with Program {
       tasks.map(t => Future(t.run())(execContext))
     }
   }
-
-  println("Good luck 🤓")
 }
