@@ -4,7 +4,7 @@ import org.junit.jupiter.api.Test
 import org.scalatest.matchers.should.Matchers
 
 import java.util.concurrent.atomic.AtomicInteger
-import scala.util.Success
+import scala.util.{Failure, Success}
 
 object MainSpec extends Matchers {
 
@@ -14,11 +14,30 @@ object MainSpec extends Matchers {
   }
 
   @Test
-  def testSingleSuccessfulResult(): Unit = {
+  def testSingleSuccessfulTask(): Unit = {
     //given successful task
     val task = LambdaTask(() => ())
-    //then run tasks should return success
+    //then run tasks should return success in the list
     Main.runTasks(List(task)) shouldBe List(Success(()))
+  }
+
+  @Test
+  def testSingleFailingTask(): Unit = {
+    val exception = new Exception("some ex")
+    //given failing task
+    val task = LambdaTask(() => throw exception)
+    //then run tasks should return the failure in the list
+    Main.runTasks(List(task)) shouldBe List(Failure(exception))
+  }
+
+  @Test
+  def testMixedTasks(): Unit = {
+    val exception = new Exception("some ex")
+    //given failing task
+    val failingTask = LambdaTask(() => throw exception)
+    val successfulTask = LambdaTask(() => ())
+    //then run tasks should return the failure in the list
+    Main.runTasks(List(failingTask, successfulTask)) shouldBe List(Failure(exception), Success())
   }
 
   @Test
